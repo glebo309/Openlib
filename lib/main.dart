@@ -14,6 +14,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 // Project imports:
 import 'package:openlib/services/database.dart' show MyLibraryDb;
+import 'package:openlib/services/annas_archieve.dart';
 import 'package:openlib/ui/mylibrary_page.dart';
 import 'package:openlib/ui/search_page.dart';
 import 'package:openlib/ui/settings_page.dart';
@@ -28,7 +29,8 @@ import 'package:openlib/state/state.dart'
         openPdfWithExternalAppProvider,
         openEpubWithExternalAppProvider,
         userAgentProvider,
-        cookieProvider;
+        cookieProvider,
+        archiveBaseUrlProvider;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +56,13 @@ void main() async {
 
   String browserUserAgent = await dataBase.getBrowserOptions('userAgent');
   String browserCookie = await dataBase.getBrowserOptions('cookie');
+  String archiveBaseUrl = AnnasArchieve.defaultBaseUrl;
+  try {
+    archiveBaseUrl = AnnasArchieve.normalizeBaseUrl(
+        await dataBase.getPreference('annasArchiveBaseUrl'));
+  } on FormatException {
+    // Keep the app usable if a previously saved setting is invalid.
+  }
 
   if (Platform.isAndroid) {
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
@@ -73,6 +82,7 @@ void main() async {
             .overrideWith((ref) => openEpubwithExternalapp),
         userAgentProvider.overrideWith((ref) => browserUserAgent),
         cookieProvider.overrideWith((ref) => browserCookie),
+        archiveBaseUrlProvider.overrideWith((ref) => archiveBaseUrl),
       ],
       child: const MyApp(),
     ),

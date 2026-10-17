@@ -79,6 +79,11 @@ final enableFiltersState = StateProvider<bool>((ref) => true);
 // Web/Download States
 final cookieProvider = StateProvider<String>((ref) => "");
 final userAgentProvider = StateProvider<String>((ref) => "");
+final archiveBaseUrlProvider =
+    StateProvider<String>((ref) => AnnasArchieve.defaultBaseUrl);
+// Browser-rendered pages are only kept for the current app session.
+final archiveBrowserPagesProvider =
+    StateProvider<Map<String, String>>((ref) => {});
 final webViewLoadingState = StateProvider.autoDispose<bool>((ref) => true);
 final downloadProgressProvider = StateProvider.autoDispose<double>((ref) => 0.0);
 final mirrorStatusProvider = StateProvider.autoDispose<bool>((ref) => false);
@@ -177,21 +182,33 @@ final searchProvider = FutureProvider.family
     .autoDispose<List<BookData>, String>((ref, searchQuery) async {
   if (searchQuery.isEmpty) return []; // Return empty list if search query is empty
 
-  final AnnasArchieve annasArchieve = AnnasArchieve();
-  List<BookData> data = await annasArchieve.searchBooks(
+  final AnnasArchieve annasArchieve = AnnasArchieve(
+      baseUrl: ref.watch(archiveBaseUrlProvider));
+  ref.onDispose(() => annasArchieve.dio.close(force: true));
+  final url = annasArchieve.urlEncoder(
       searchQuery: searchQuery,
       content: ref.watch(getTypeValue),
       sort: ref.watch(getSortValue),
       fileType: ref.watch(getFileTypeValue),
       enableFilters: ref.watch(enableFiltersState));
+  List<BookData> data = await annasArchieve.searchBooks(
+      searchQuery: searchQuery,
+      content: ref.watch(getTypeValue),
+      sort: ref.watch(getSortValue),
+      fileType: ref.watch(getFileTypeValue),
+      enableFilters: ref.watch(enableFiltersState),
+      pageHtml: ref.watch(archiveBrowserPagesProvider)[url]);
   return data;
 });
 
 // Provider for Book Info Details
 final bookInfoProvider =
     FutureProvider.family<BookInfoData, String>((ref, url) async {
-  final AnnasArchieve annasArchieve = AnnasArchieve();
-  BookInfoData data = await annasArchieve.bookInfo(url: url);
+  final AnnasArchieve annasArchieve = AnnasArchieve(
+      baseUrl: ref.watch(archiveBaseUrlProvider));
+  ref.onDispose(() => annasArchieve.dio.close(force: true));
+  BookInfoData data = await annasArchieve.bookInfo(url: url,
+      pageHtml: ref.watch(archiveBrowserPagesProvider)[annasArchieve.resolveUrl(url)]);
   return data;
 });
 

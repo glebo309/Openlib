@@ -16,6 +16,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:openlib/services/database.dart';
 import 'package:openlib/ui/about_page.dart';
 import 'package:openlib/ui/components/page_title_widget.dart';
+import 'package:openlib/ui/components/archive_source_setting.dart';
 
 import 'package:openlib/state/state.dart'
     show
@@ -66,6 +67,7 @@ class SettingsPage extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const TitleText("Settings"),
+            const ArchiveSourceSetting(),
             _PaddedContainer(
               children: [
                 Text(

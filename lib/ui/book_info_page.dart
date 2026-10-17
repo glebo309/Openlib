@@ -36,7 +36,8 @@ import 'package:openlib/state/state.dart'
         downloadState,
         checkSumState,
         checkIdExists,
-        myLibraryProvider;
+        myLibraryProvider,
+        archiveBaseUrlProvider;
 
 class BookInfoPage extends ConsumerWidget {
   const BookInfoPage({super.key, required this.url});
@@ -270,6 +271,7 @@ Future<void> downloadFileWidget(WidgetRef ref, BuildContext context,
   // print(mirrors);
   downloadFile(
       mirrors: mirrors,
+      archiveBaseUrl: ref.read(archiveBaseUrlProvider),
       md5: data.md5,
       format: data.format!,
       onStart: () {

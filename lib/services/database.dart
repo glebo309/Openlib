@@ -6,6 +6,7 @@ import 'package:sqflite/sqflite.dart';
 
 // Project imports:
 import 'package:openlib/services/files.dart';
+import 'package:openlib/services/annas_archieve.dart';
 
 class MyBook {
   final String id;
@@ -104,6 +105,10 @@ class MyLibraryDb {
         }
       },
       onOpen: (db) async {
+        await db.insert('preferences', {
+          'name': 'annasArchiveBaseUrl',
+          'value': AnnasArchieve.defaultBaseUrl,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
         final bookStorageDefaultDirectory =
             await getBookStorageDefaultDirectory;
         await db.execute(

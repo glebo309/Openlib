@@ -52,10 +52,112 @@ class BookInfoData extends BookData {
 // ANNA'S ARCHIVE SERVICE (ALL FIXES APPLIED)
 // ====================================================================
 
-class AnnasArchieve {
-  static const String baseUrl = "https://annas-archive.se";
+class ArchiveRequestException implements Exception {
+  const ArchiveRequestException({
+    required this.url,
+    this.needsBrowser = false,
+    this.cause,
+  });
 
-  final Dio dio = Dio();
+  final String url;
+  final bool needsBrowser;
+  final Object? cause;
+
+  @override
+  String toString() => needsBrowser
+      ? 'Complete the website check at ${Uri.parse(url).host}.'
+      : 'Cannot reach ${Uri.parse(url).host}.';
+}
+
+class AnnasArchieve {
+  static const String defaultBaseUrl = 'https://annas-archive.gl';
+
+  AnnasArchieve({String baseUrl = defaultBaseUrl, Dio? dio})
+      : baseUrl = normalizeBaseUrl(baseUrl),
+        dio = dio ??
+            Dio(BaseOptions(
+              connectTimeout: const Duration(seconds: 20),
+              receiveTimeout: const Duration(seconds: 30),
+            ));
+
+  final String baseUrl;
+  final Dio dio;
+
+  static String normalizeBaseUrl(String value) {
+    final uri = Uri.tryParse(value.trim());
+    if (uri == null ||
+        uri.scheme != 'https' ||
+        uri.host.isEmpty ||
+        RegExp(r'\s|%').hasMatch(uri.host) ||
+        uri.userInfo.isNotEmpty ||
+        (uri.path.isNotEmpty && uri.path != '/') ||
+        uri.hasQuery ||
+        uri.hasFragment) {
+      throw const FormatException(
+          'Enter an HTTPS website address without a path.');
+    }
+    return uri.origin;
+  }
+
+  String resolveUrl(String value) {
+    final uri = Uri.parse(value);
+    const archiveHosts = {
+      'annas-archive.org',
+      'annas-archive.se',
+      'annas-archive.li',
+      'annas-archive.gl',
+      'annas-archive.pk',
+      'annas-archive.gd',
+    };
+    if (!uri.hasAuthority || archiveHosts.contains(uri.host)) {
+      final path = '${uri.path}${uri.hasQuery ? '?${uri.query}' : ''}'
+          '${uri.hasFragment ? '#${uri.fragment}' : ''}';
+      return Uri.parse(baseUrl).resolve(path).toString();
+    }
+    return value;
+  }
+
+  static bool _isBrowserCheck(String html) {
+    final title = parse(html).querySelector('title')?.text.toLowerCase() ?? '';
+    return title.contains('ddos-guard') ||
+        title.contains('just a moment') ||
+        html.contains('/.well-known/ddos-guard/js-challenge/') ||
+        html.contains('/cdn-cgi/challenge-platform/');
+  }
+
+  static bool isArchivePage(String html) =>
+      !_isBrowserCheck(html) &&
+      parse(html).querySelector('.main-inner') != null;
+
+  Future<String> _getPage(String url, String? pageHtml) async {
+    if (pageHtml != null) return pageHtml;
+    try {
+      final response = await dio.get<String>(url,
+          options: Options(
+              headers: defaultDioHeaders, responseType: ResponseType.plain));
+      final html = response.data ?? '';
+      if (_isBrowserCheck(html)) {
+        throw ArchiveRequestException(url: url, needsBrowser: true);
+      }
+      return html;
+    } on DioException catch (error) {
+      final status = error.response?.statusCode;
+      if (status == 403 || status == 429 || status == 503) {
+        throw ArchiveRequestException(
+            url: url, needsBrowser: true, cause: error);
+      }
+      if ({
+        DioExceptionType.connectionError,
+        DioExceptionType.connectionTimeout,
+        DioExceptionType.receiveTimeout,
+        DioExceptionType.sendTimeout,
+        DioExceptionType.unknown
+      }.contains(error.type)) {
+        throw ArchiveRequestException(url: url, cause: error);
+      }
+      rethrow;
+    }
+  }
 
   Map<String, dynamic> defaultDioHeaders = {
     "user-agent":
@@ -113,7 +215,7 @@ class AnnasArchieve {
       }
 
       final String title = mainLinkElement.text.trim();
-      final String link = baseUrl + mainLinkElement.attributes['href']!;
+      final String link = resolveUrl(mainLinkElement.attributes['href']!);
       final String md5 = getMd5(mainLinkElement.attributes['href']!);
       final String? thumbnail = thumbnailElement?.attributes['src'];
 
@@ -172,7 +274,7 @@ class AnnasArchieve {
     String? mirror;
     final slowDownloadLinks = main.querySelectorAll('ul.list-inside a[href*="/slow_download/"]');
     if (slowDownloadLinks.isNotEmpty && slowDownloadLinks.first.attributes['href'] != null) {
-        mirror = baseUrl + slowDownloadLinks.first.attributes['href']!;
+        mirror = resolveUrl(slowDownloadLinks.first.attributes['href']!);
     }
     // --------------------------------
 
@@ -252,7 +354,8 @@ class AnnasArchieve {
       String content = "",
       String sort = "",
       String fileType = "",
-      bool enableFilters = true}) async {
+      bool enableFilters = true,
+      String? pageHtml}) async {
     try {
       final String encodedURL = urlEncoder(
           searchQuery: searchQuery,
@@ -261,25 +364,23 @@ class AnnasArchieve {
           fileType: fileType,
           enableFilters: enableFilters);
 
-      final response = await dio.get(encodedURL,
-          options: Options(headers: defaultDioHeaders));
-      return _parser(response.data, fileType);
+      return _parser(await _getPage(encodedURL, pageHtml), fileType);
     } on DioException catch (e) {
-        if (e.type == DioExceptionType.unknown) {
-            throw "socketException";
-        }
-        rethrow;
+      if (e.type == DioExceptionType.unknown) {
+        throw "socketException";
+      }
+      rethrow;
     }
   }
 
-  Future<BookInfoData> bookInfo({required String url}) async {
+  Future<BookInfoData> bookInfo({required String url, String? pageHtml}) async {
+    url = resolveUrl(url);
     try {
-      final response =
-          await dio.get(url, options: Options(headers: defaultDioHeaders));
-      BookInfoData? data = await _bookInfoParser(response.data, url);
+      BookInfoData? data =
+          await _bookInfoParser(await _getPage(url, pageHtml), url);
       if (data != null) {
         // Here's where you might use _safeParse if the API returned a numeric field
-        // E.g., int pages = _safeParse(data.pages).toInt(); 
+        // E.g., int pages = _safeParse(data.pages).toInt();
         return data;
       } else {
         throw 'unable to get data';

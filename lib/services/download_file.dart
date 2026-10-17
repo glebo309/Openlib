@@ -7,6 +7,7 @@ import 'package:dio/dio.dart';
 
 // Project imports:
 import 'package:openlib/services/database.dart' show MyLibraryDb;
+import 'package:openlib/services/annas_archieve.dart';
 
 MyLibraryDb dataBase = MyLibraryDb.instance;
 
@@ -16,7 +17,8 @@ Future<String> _getFilePath(String fileName) async {
   return '$bookStorageDirectory/$fileName';
 }
 
-List<String> _reorderMirrors(List<String> mirrors) {
+List<String> orderDownloadMirrors(List<String> mirrors,
+    {String archiveBaseUrl = AnnasArchieve.defaultBaseUrl}) {
   List<String> ipfsMirrors = [];
   List<String> httpsMirrors = [];
 
@@ -24,8 +26,10 @@ List<String> _reorderMirrors(List<String> mirrors) {
     if (element.contains('ipfs') == true) {
       ipfsMirrors.add(element);
     } else {
-      if (element.startsWith('https://annas-archive.se') != true &&
-          element.startsWith('https://1lib.sk') != true) {
+      final host = Uri.tryParse(element)?.host;
+      if (host != Uri.parse(archiveBaseUrl).host &&
+          host != '1lib.sk' &&
+          !(host?.startsWith('annas-archive.') ?? false)) {
         httpsMirrors.add(element);
       }
     }
@@ -55,6 +59,7 @@ Future<String?> _getAliveMirror(List<String> mirrors) async {
 
 Future<void> downloadFile(
     {required List<String> mirrors,
+    String archiveBaseUrl = AnnasArchieve.defaultBaseUrl,
     required String md5,
     required String format,
     required Function onStart,
@@ -68,7 +73,8 @@ Future<void> downloadFile(
     Dio dio = Dio();
 
     String path = await _getFilePath('$md5.$format');
-    List<String> orderedMirrors = _reorderMirrors(mirrors);
+    List<String> orderedMirrors = orderDownloadMirrors(mirrors,
+        archiveBaseUrl: archiveBaseUrl);
 
     String? workingMirror = await _getAliveMirror(orderedMirrors);
 
