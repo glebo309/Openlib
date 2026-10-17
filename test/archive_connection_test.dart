@@ -114,6 +114,15 @@ void main() {
               .having((e) => e.cause, 'cause', isA<DioException>())));
     });
 
+    test('server failure offers retry without exposing a raw Dio exception', () async {
+      final adapter = StubAdapter((_) async => ResponseBody.fromString('', 502));
+      final service = AnnasArchieve(dio: Dio()..httpClientAdapter = adapter);
+      await expectLater(service.searchBooks(searchQuery: 'Dmt'),
+        throwsA(isA<ArchiveRequestException>()
+          .having((e) => e.needsBrowser, 'needsBrowser', false)
+          .having((e) => (e.cause as DioException).response?.statusCode, 'status', 502)));
+    });
+
     test('HTTP 403 offers a browser check instead of an empty result',
         () async {
       final adapter = StubAdapter((options) async =>

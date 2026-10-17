@@ -174,6 +174,9 @@ class AnnasArchieve {
         throw ArchiveRequestException(
             url: url, needsBrowser: true, cause: error);
       }
+      if (status != null && status >= 500) {
+        throw ArchiveRequestException(url: url, cause: error);
+      }
       if ({
         DioExceptionType.connectionError,
         DioExceptionType.connectionTimeout,
