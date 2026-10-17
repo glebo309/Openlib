@@ -58,7 +58,9 @@ void main() async {
   if (Platform.isAndroid) {
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
         systemNavigationBarColor:
-            isDarkMode ? Colors.black : Colors.grey.shade200));
+            isDarkMode ? Colors.black : Colors.grey.shade200,
+        systemNavigationBarIconBrightness:
+            isDarkMode ? Brightness.light : Brightness.dark));
     await moveFilesToAndroidInternalStorage();
   }
 
@@ -167,7 +169,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           curve: Curves.fastLinearToSlowEaseIn,
           duration: const Duration(milliseconds: 25),
           gap: 5,
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.tertiary,
           activeColor: Colors.white,
           iconSize: 19,
           tabBackgroundColor:

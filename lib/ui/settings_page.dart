@@ -87,7 +87,9 @@ class SettingsPage extends ConsumerWidget {
                     if (Platform.isAndroid) {
                       SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
                           systemNavigationBarColor:
-                              value ? Colors.black : Colors.grey.shade200));
+                              value ? Colors.black : Colors.grey.shade200,
+                          systemNavigationBarIconBrightness:
+                              value ? Brightness.light : Brightness.dark));
                     }
                   },
                 )
