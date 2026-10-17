@@ -21,14 +21,11 @@ class _ArchiveBrowserPageState extends State<ArchiveBrowserPage> {
     setState(() => _reading = true);
     try {
       final current = await controller.getUrl();
-      final expected = Uri.parse(widget.url);
-      final actual = current == null ? null : Uri.tryParse(current.toString());
       final html = await controller.evaluateJavascript(
           source: 'document.documentElement.outerHTML');
       if (!mounted) return;
-      if (actual?.origin != expected.origin ||
-          actual?.path != expected.path ||
-          actual?.query != expected.query ||
+      if (current == null ||
+          !AnnasArchieve.matchesRequestedPage(widget.url, current.toString()) ||
           html is! String ||
           !AnnasArchieve.isArchivePage(html)) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(

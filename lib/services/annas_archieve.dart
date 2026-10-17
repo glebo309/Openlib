@@ -129,6 +129,34 @@ class AnnasArchieve {
       !_isBrowserCheck(html) &&
       parse(html).querySelector('.main-inner') != null;
 
+  static bool matchesRequestedPage(String requestedUrl, String currentUrl) {
+    final expected = Uri.tryParse(requestedUrl);
+    final actual = Uri.tryParse(currentUrl);
+    if (expected == null || actual == null ||
+        !expected.hasAuthority || !actual.hasAuthority ||
+        expected.scheme != 'https' || actual.scheme != 'https' ||
+        expected.origin != actual.origin || expected.path != actual.path) {
+      return false;
+    }
+    Map<String, List<String>> searchParameters(Uri uri) => {
+      for (final entry in uri.queryParametersAll.entries)
+        if (entry.key != 'check' && entry.value.any((value) => value.isNotEmpty))
+          entry.key: (entry.value.map((value) => entry.key == 'q'
+              ? value.trim().toLowerCase() : value).toList()..sort()),
+    };
+    final requested = searchParameters(expected);
+    final current = searchParameters(actual);
+    if (requested.length != current.length) return false;
+    for (final entry in requested.entries) {
+      final values = current[entry.key];
+      if (values == null || values.length != entry.value.length) return false;
+      for (var i = 0; i < values.length; i++) {
+        if (values[i] != entry.value[i]) return false;
+      }
+    }
+    return true;
+  }
+
   Future<String> _getPage(String url, String? pageHtml) async {
     if (pageHtml != null) return pageHtml;
     try {
@@ -342,11 +370,12 @@ class AnnasArchieve {
       required String sort,
       required String fileType,
       required bool enableFilters}) {
-    searchQuery = searchQuery.replaceAll(" ", "+");
-    if (!enableFilters) {
-      return '$baseUrl/search?q=$searchQuery';
-    }
-    return '$baseUrl/search?index=&q=$searchQuery&content=$content&ext=$fileType&sort=$sort';
+    return Uri.parse('$baseUrl/search').replace(queryParameters: {
+      'q': searchQuery,
+      if (enableFilters && content.isNotEmpty) 'content': content,
+      if (enableFilters && fileType.isNotEmpty) 'ext': fileType,
+      if (enableFilters && sort.isNotEmpty) 'sort': sort,
+    }).toString();
   }
 
   Future<List<BookData>> searchBooks(
