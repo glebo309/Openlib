@@ -152,33 +152,37 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final selectedIndex = ref.watch(selectedIndexProvider);
 
     return Scaffold(
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: (notification) {
-          if (notification.direction == ScrollDirection.reverse &&
-              _showExpandedHeader) {
-            setState(() => _showExpandedHeader = false);
-          } else if (notification.direction == ScrollDirection.forward &&
-              !_showExpandedHeader) {
-            setState(() => _showExpandedHeader = true);
-          }
-          return false;
-        },
-        child: Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: _showExpandedHeader ? kToolbarHeight : 0,
-              child: AppBar(
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                title: const Text("Openlib"),
-                titleTextStyle: Theme.of(context).textTheme.displayLarge,
+      body: SafeArea(
+        bottom: false,
+        child: NotificationListener<UserScrollNotification>(
+          onNotification: (notification) {
+            if (notification.direction == ScrollDirection.reverse &&
+                _showExpandedHeader) {
+              setState(() => _showExpandedHeader = false);
+            } else if (notification.direction == ScrollDirection.forward &&
+                !_showExpandedHeader) {
+              setState(() => _showExpandedHeader = true);
+            }
+            return false;
+          },
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: _showExpandedHeader ? kToolbarHeight : 0,
+                child: AppBar(
+                  primary: false,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  title: const Text("Openlib"),
+                  titleTextStyle: Theme.of(context).textTheme.displayLarge,
+                ),
               ),
-            ),
-            Expanded(
-              child: _widgetOptions.elementAt(selectedIndex),
-            ),
-            const DownloadStatusBar(),
-          ],
+              Expanded(
+                child: _widgetOptions.elementAt(selectedIndex),
+              ),
+              const DownloadStatusBar(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
