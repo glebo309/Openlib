@@ -174,6 +174,9 @@ class AnnasArchieve {
       if (status == 403 || status == 429 || status == 503) {
         return _loadBrowserPage(url, cause: error);
       }
+      if (status != null && status >= 500) {
+        throw ArchiveRequestException(url: url, cause: error);
+      }
       if ({
         DioExceptionType.connectionError,
         DioExceptionType.connectionTimeout,
