@@ -117,6 +117,16 @@ class MyLibraryDb {
             "INSERT OR IGNORE INTO preferences (name, value) VALUES ('openPdfwithExternalApp', 0)");
         await db.execute(
             "INSERT OR IGNORE INTO preferences (name, value) VALUES ('openEpubwithExternalApp', 0)");
+        for (final format in ['epub', 'pdf']) {
+          final oldName = format == 'epub'
+              ? 'openEpubwithExternalApp' : 'openPdfwithExternalApp';
+          await db.rawInsert(
+            'INSERT OR IGNORE INTO preferences (name, value) '
+            'SELECT ?, CASE WHEN value = ? THEN ? ELSE ? END '
+            'FROM preferences WHERE name = ?',
+            ['${format}ReaderApp', '1', 'ask', 'internal', oldName],
+          );
+        }
         await db.execute(
             "INSERT OR IGNORE INTO preferences (name, value) VALUES ('bookStorageDirectory', '$bookStorageDefaultDirectory')");
       },

@@ -15,6 +15,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 // Project imports:
 import 'package:openlib/services/database.dart' show MyLibraryDb;
 import 'package:openlib/services/annas_archieve.dart';
+import 'package:openlib/services/archive_browser_session.dart';
 import 'package:openlib/ui/mylibrary_page.dart';
 import 'package:openlib/ui/search_page.dart';
 import 'package:openlib/ui/settings_page.dart';
@@ -30,7 +31,9 @@ import 'package:openlib/state/state.dart'
         openEpubWithExternalAppProvider,
         userAgentProvider,
         cookieProvider,
-        archiveBaseUrlProvider;
+        archiveBaseUrlProvider,
+        archivePageLoaderProvider,
+        readerPreferenceProvider;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -56,6 +59,8 @@ void main() async {
 
   String browserUserAgent = await dataBase.getBrowserOptions('userAgent');
   String browserCookie = await dataBase.getBrowserOptions('cookie');
+  final epubReader = await dataBase.getPreference('epubReaderApp') as String;
+  final pdfReader = await dataBase.getPreference('pdfReaderApp') as String;
   String archiveBaseUrl = AnnasArchieve.defaultBaseUrl;
   try {
     archiveBaseUrl = AnnasArchieve.normalizeBaseUrl(
@@ -83,6 +88,11 @@ void main() async {
         userAgentProvider.overrideWith((ref) => browserUserAgent),
         cookieProvider.overrideWith((ref) => browserCookie),
         archiveBaseUrlProvider.overrideWith((ref) => archiveBaseUrl),
+        if (Platform.isAndroid)
+          archivePageLoaderProvider
+              .overrideWithValue(ArchiveBrowserSession.loadPage),
+        readerPreferenceProvider('epub').overrideWith((ref) => epubReader),
+        readerPreferenceProvider('pdf').overrideWith((ref) => pdfReader),
       ],
       child: const MyApp(),
     ),
@@ -154,8 +164,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
               child: AppBar(
                 backgroundColor: Theme.of(context).colorScheme.surface,
                 title: const Text("Openlib"),
-                titleTextStyle:
-                    Theme.of(context).textTheme.displayLarge,
+                titleTextStyle: Theme.of(context).textTheme.displayLarge,
               ),
             ),
             Expanded(
@@ -166,8 +175,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
       ),
       bottomNavigationBar: SafeArea(
         child: GNav(
-          backgroundColor:
-              isDarkMode ? Colors.black : Colors.grey.shade200,
+          backgroundColor: isDarkMode ? Colors.black : Colors.grey.shade200,
           haptic: true,
           tabBorderRadius: 50,
           tabActiveBorder: Border.all(
@@ -180,10 +188,8 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           color: Colors.white,
           activeColor: Colors.white,
           iconSize: 19,
-          tabBackgroundColor:
-              Theme.of(context).colorScheme.secondary,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 13, vertical: 6.5),
+          tabBackgroundColor: Theme.of(context).colorScheme.secondary,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6.5),
           tabs: const [
             GButton(icon: Icons.trending_up, text: 'Home'),
             GButton(icon: Icons.search, text: 'Search'),

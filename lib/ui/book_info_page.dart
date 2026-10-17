@@ -197,6 +197,7 @@ class _ActionButtonWidgetState extends ConsumerState<ActionButtonWidget> {
         if (isExists) {
           return FileOpenAndDeleteButtons(
             id: widget.data.md5,
+            title: widget.data.title,
             format: widget.data.format!,
             onDelete: () async {
               await Future.delayed(const Duration(seconds: 1));

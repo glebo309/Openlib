@@ -15,6 +15,7 @@ import 'package:openlib/services/database.dart';
 import 'package:openlib/services/files.dart';
 import 'package:openlib/services/open_library.dart';
 import 'package:openlib/services/goodreads.dart';
+import 'package:openlib/services/reader_apps.dart';
 // Assuming OpenLibrary, Goodreads, PenguinRandomHouse, BookDigits, and SubCategoriesTypeList are defined
 // or are simple placeholder services/models that work as intended.
 
@@ -79,6 +80,8 @@ final enableFiltersState = StateProvider<bool>((ref) => true);
 // Web/Download States
 final cookieProvider = StateProvider<String>((ref) => "");
 final userAgentProvider = StateProvider<String>((ref) => "");
+final archivePageLoaderProvider =
+    Provider<Future<String> Function(String)?>((ref) => null);
 final archiveBaseUrlProvider =
     StateProvider<String>((ref) => AnnasArchieve.defaultBaseUrl);
 // Browser-rendered pages are only kept for the current app session.
@@ -100,6 +103,11 @@ final pdfCurrentPage = StateProvider.autoDispose<int>((ref) => 0);
 final totalPdfPage = StateProvider.autoDispose<int>((ref) => 0);
 final openPdfWithExternalAppProvider = StateProvider<bool>((ref) => false);
 final openEpubWithExternalAppProvider = StateProvider<bool>((ref) => false);
+final readerPreferenceProvider =
+    StateProvider.family<String, String>((ref, format) => 'internal');
+final readerAppsProvider = Provider<ReaderApps>((ref) => const ReaderApps());
+final installedReadersProvider = FutureProvider.family<List<ReaderApp>, String>(
+    (ref, format) => ref.watch(readerAppsProvider).installedReaders(format));
 
 // ====================================================================
 // DERIVED (COMPUTED) STATE PROVIDERS
@@ -183,7 +191,8 @@ final searchProvider = FutureProvider.family
   if (searchQuery.isEmpty) return []; // Return empty list if search query is empty
 
   final AnnasArchieve annasArchieve = AnnasArchieve(
-      baseUrl: ref.watch(archiveBaseUrlProvider));
+      baseUrl: ref.watch(archiveBaseUrlProvider),
+      browserPageLoader: ref.watch(archivePageLoaderProvider));
   ref.onDispose(() => annasArchieve.dio.close(force: true));
   final url = annasArchieve.urlEncoder(
       searchQuery: searchQuery,
@@ -205,7 +214,8 @@ final searchProvider = FutureProvider.family
 final bookInfoProvider =
     FutureProvider.family<BookInfoData, String>((ref, url) async {
   final AnnasArchieve annasArchieve = AnnasArchieve(
-      baseUrl: ref.watch(archiveBaseUrlProvider));
+      baseUrl: ref.watch(archiveBaseUrlProvider),
+      browserPageLoader: ref.watch(archivePageLoaderProvider));
   ref.onDispose(() => annasArchieve.dio.close(force: true));
   BookInfoData data = await annasArchieve.bookInfo(url: url,
       pageHtml: ref.watch(archiveBrowserPagesProvider)[annasArchieve.resolveUrl(url)]);

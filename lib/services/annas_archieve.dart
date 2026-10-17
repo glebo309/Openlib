@@ -72,7 +72,7 @@ class ArchiveRequestException implements Exception {
 class AnnasArchieve {
   static const String defaultBaseUrl = 'https://annas-archive.gl';
 
-  AnnasArchieve({String baseUrl = defaultBaseUrl, Dio? dio})
+  AnnasArchieve({String baseUrl = defaultBaseUrl, Dio? dio, this.browserPageLoader})
       : baseUrl = normalizeBaseUrl(baseUrl),
         dio = dio ??
             Dio(BaseOptions(
@@ -82,6 +82,7 @@ class AnnasArchieve {
 
   final String baseUrl;
   final Dio dio;
+  final Future<String> Function(String)? browserPageLoader;
 
   static String normalizeBaseUrl(String value) {
     final uri = Uri.tryParse(value.trim());
@@ -165,14 +166,13 @@ class AnnasArchieve {
               headers: defaultDioHeaders, responseType: ResponseType.plain));
       final html = response.data ?? '';
       if (_isBrowserCheck(html)) {
-        throw ArchiveRequestException(url: url, needsBrowser: true);
+        return _loadBrowserPage(url);
       }
       return html;
     } on DioException catch (error) {
       final status = error.response?.statusCode;
       if (status == 403 || status == 429 || status == 503) {
-        throw ArchiveRequestException(
-            url: url, needsBrowser: true, cause: error);
+        return _loadBrowserPage(url, cause: error);
       }
       if ({
         DioExceptionType.connectionError,
@@ -185,6 +185,19 @@ class AnnasArchieve {
       }
       rethrow;
     }
+  }
+
+  Future<String> _loadBrowserPage(String url, {Object? cause}) async {
+    final loader = browserPageLoader;
+    if (loader != null) {
+      try {
+        final html = await loader(url);
+        if (isArchivePage(html)) return html;
+      } catch (error) {
+        cause = error;
+      }
+    }
+    throw ArchiveRequestException(url: url, needsBrowser: true, cause: cause);
   }
 
   Map<String, dynamic> defaultDioHeaders = {
