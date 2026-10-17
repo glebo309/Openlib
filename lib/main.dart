@@ -15,6 +15,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 // Project imports:
 import 'package:openlib/services/database.dart' show MyLibraryDb;
 import 'package:openlib/services/annas_archieve.dart';
+import 'package:openlib/services/archive_browser_session.dart';
 import 'package:openlib/ui/mylibrary_page.dart';
 import 'package:openlib/ui/search_page.dart';
 import 'package:openlib/ui/settings_page.dart';
@@ -30,7 +31,8 @@ import 'package:openlib/state/state.dart'
         openEpubWithExternalAppProvider,
         userAgentProvider,
         cookieProvider,
-        archiveBaseUrlProvider;
+        archiveBaseUrlProvider,
+        archivePageLoaderProvider;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -83,6 +85,8 @@ void main() async {
         userAgentProvider.overrideWith((ref) => browserUserAgent),
         cookieProvider.overrideWith((ref) => browserCookie),
         archiveBaseUrlProvider.overrideWith((ref) => archiveBaseUrl),
+        if (Platform.isAndroid)
+          archivePageLoaderProvider.overrideWithValue(ArchiveBrowserSession.loadPage),
       ],
       child: const MyApp(),
     ),

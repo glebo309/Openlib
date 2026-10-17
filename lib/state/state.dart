@@ -79,6 +79,8 @@ final enableFiltersState = StateProvider<bool>((ref) => true);
 // Web/Download States
 final cookieProvider = StateProvider<String>((ref) => "");
 final userAgentProvider = StateProvider<String>((ref) => "");
+final archivePageLoaderProvider =
+    Provider<Future<String> Function(String)?>((ref) => null);
 final archiveBaseUrlProvider =
     StateProvider<String>((ref) => AnnasArchieve.defaultBaseUrl);
 // Browser-rendered pages are only kept for the current app session.
@@ -183,7 +185,8 @@ final searchProvider = FutureProvider.family
   if (searchQuery.isEmpty) return []; // Return empty list if search query is empty
 
   final AnnasArchieve annasArchieve = AnnasArchieve(
-      baseUrl: ref.watch(archiveBaseUrlProvider));
+      baseUrl: ref.watch(archiveBaseUrlProvider),
+      browserPageLoader: ref.watch(archivePageLoaderProvider));
   ref.onDispose(() => annasArchieve.dio.close(force: true));
   final url = annasArchieve.urlEncoder(
       searchQuery: searchQuery,
@@ -205,7 +208,8 @@ final searchProvider = FutureProvider.family
 final bookInfoProvider =
     FutureProvider.family<BookInfoData, String>((ref, url) async {
   final AnnasArchieve annasArchieve = AnnasArchieve(
-      baseUrl: ref.watch(archiveBaseUrlProvider));
+      baseUrl: ref.watch(archiveBaseUrlProvider),
+      browserPageLoader: ref.watch(archivePageLoaderProvider));
   ref.onDispose(() => annasArchieve.dio.close(force: true));
   BookInfoData data = await annasArchieve.bookInfo(url: url,
       pageHtml: ref.watch(archiveBrowserPagesProvider)[annasArchieve.resolveUrl(url)]);
