@@ -72,7 +72,11 @@ class ArchiveRequestException implements Exception {
 class AnnasArchieve {
   static const String defaultBaseUrl = 'https://annas-archive.gl';
 
-  AnnasArchieve({String baseUrl = defaultBaseUrl, Dio? dio, this.browserPageLoader})
+  AnnasArchieve(
+      {String baseUrl = defaultBaseUrl,
+      Dio? dio,
+      this.browserPageLoader,
+      this.preferBrowser = false})
       : baseUrl = normalizeBaseUrl(baseUrl),
         dio = dio ??
             Dio(BaseOptions(
@@ -82,6 +86,7 @@ class AnnasArchieve {
 
   final String baseUrl;
   final Dio dio;
+  final bool preferBrowser;
   final Future<String> Function(String)? browserPageLoader;
 
   static String normalizeBaseUrl(String value) {
@@ -133,18 +138,26 @@ class AnnasArchieve {
   static bool matchesRequestedPage(String requestedUrl, String currentUrl) {
     final expected = Uri.tryParse(requestedUrl);
     final actual = Uri.tryParse(currentUrl);
-    if (expected == null || actual == null ||
-        !expected.hasAuthority || !actual.hasAuthority ||
-        expected.scheme != 'https' || actual.scheme != 'https' ||
-        expected.origin != actual.origin || expected.path != actual.path) {
+    if (expected == null ||
+        actual == null ||
+        !expected.hasAuthority ||
+        !actual.hasAuthority ||
+        expected.scheme != 'https' ||
+        actual.scheme != 'https' ||
+        expected.origin != actual.origin ||
+        expected.path != actual.path) {
       return false;
     }
     Map<String, List<String>> searchParameters(Uri uri) => {
-      for (final entry in uri.queryParametersAll.entries)
-        if (entry.key != 'check' && entry.value.any((value) => value.isNotEmpty))
-          entry.key: (entry.value.map((value) => entry.key == 'q'
-              ? value.trim().toLowerCase() : value).toList()..sort()),
-    };
+          for (final entry in uri.queryParametersAll.entries)
+            if (entry.key != 'check' &&
+                entry.value.any((value) => value.isNotEmpty))
+              entry.key: (entry.value
+                  .map((value) =>
+                      entry.key == 'q' ? value.trim().toLowerCase() : value)
+                  .toList()
+                ..sort()),
+        };
     final requested = searchParameters(expected);
     final current = searchParameters(actual);
     if (requested.length != current.length) return false;
@@ -160,6 +173,8 @@ class AnnasArchieve {
 
   Future<String> _getPage(String url, String? pageHtml) async {
     if (pageHtml != null) return pageHtml;
+    if (preferBrowser && browserPageLoader != null)
+      return _loadBrowserPage(url);
     try {
       final response = await dio.get<String>(url,
           options: Options(
@@ -237,7 +252,7 @@ class AnnasArchieve {
     }
     return value;
   }
-  
+
   // --------------------------------------------------------------------
   // _parser FUNCTION (Search Results - Fixed nth-of-type issue)
   // --------------------------------------------------------------------
@@ -254,7 +269,8 @@ class AnnasArchieve {
           container.querySelector('a.line-clamp-\\[3\\].js-vim-focus');
       final thumbnailElement = container.querySelector('a[href^="/md5/"] img');
 
-      if (mainLinkElement == null || mainLinkElement.attributes['href'] == null) {
+      if (mainLinkElement == null ||
+          mainLinkElement.attributes['href'] == null) {
         continue;
       }
 
@@ -266,27 +282,31 @@ class AnnasArchieve {
       // Fix: Use sequential traversal instead of :nth-of-type
       dom.Element? authorLinkElement = mainLinkElement.nextElementSibling;
       dom.Element? publisherLinkElement = authorLinkElement?.nextElementSibling;
-      
-      if (authorLinkElement?.attributes['href']?.startsWith('/search?q=') != true) {
-          authorLinkElement = null;
+
+      if (authorLinkElement?.attributes['href']?.startsWith('/search?q=') !=
+          true) {
+        authorLinkElement = null;
       }
-      if (publisherLinkElement?.attributes['href']?.startsWith('/search?q=') != true) {
-          publisherLinkElement = null;
+      if (publisherLinkElement?.attributes['href']?.startsWith('/search?q=') !=
+          true) {
+        publisherLinkElement = null;
       }
 
       final String? authorRaw = authorLinkElement?.text.trim();
       final String? author = (authorRaw != null && authorRaw.contains('icon-'))
           ? authorRaw.split(' ').skip(1).join(' ').trim()
           : authorRaw;
-      
+
       final String? publisher = publisherLinkElement?.text.trim();
-      
+
       final infoElement = container.querySelector('div.text-gray-800');
       // No need for _safeParse here if we only treat info as a string
-      final String? info = infoElement?.text.trim(); 
-      
+      final String? info = infoElement?.text.trim();
+
       final bool hasMatchingFileType = fileType.isEmpty
-          ? (info?.contains(RegExp(r'(PDF|EPUB|CBR|CBZ)', caseSensitive: false)) == true)
+          ? (info?.contains(
+                  RegExp(r'(PDF|EPUB|CBR|CBZ)', caseSensitive: false)) ==
+              true)
           : info?.toLowerCase().contains(fileType.toLowerCase()) == true;
 
       if (hasMatchingFileType) {
@@ -311,44 +331,49 @@ class AnnasArchieve {
   // --------------------------------------------------------------------
   Future<BookInfoData?> _bookInfoParser(resData, url) async {
     var document = parse(resData.toString());
-    final main = document.querySelector('div.main-inner'); 
+    final main = document.querySelector('div.main-inner');
     if (main == null) return null;
 
     // --- Mirror Link Extraction ---
     String? mirror;
-    final slowDownloadLinks = main.querySelectorAll('ul.list-inside a[href*="/slow_download/"]');
-    if (slowDownloadLinks.isNotEmpty && slowDownloadLinks.first.attributes['href'] != null) {
-        mirror = resolveUrl(slowDownloadLinks.first.attributes['href']!);
+    final slowDownloadLinks =
+        main.querySelectorAll('ul.list-inside a[href*="/slow_download/"]');
+    if (slowDownloadLinks.isNotEmpty &&
+        slowDownloadLinks.first.attributes['href'] != null) {
+      mirror = resolveUrl(slowDownloadLinks.first.attributes['href']!);
     }
     // --------------------------------
 
-
     // --- Core Info Extraction ---
-    
+
     // Title
-    final titleElement = main.querySelector('div.font-semibold.text-2xl'); 
-    
+    final titleElement = main.querySelector('div.font-semibold.text-2xl');
+
     // Author
-    final authorLinkElement = main.querySelector('a[href^="/search?q="].text-base');
-    
+    final authorLinkElement =
+        main.querySelector('a[href^="/search?q="].text-base');
+
     // Publisher
     dom.Element? publisherLinkElement = authorLinkElement?.nextElementSibling;
-    if (publisherLinkElement?.localName != 'a' || publisherLinkElement?.attributes['href']?.startsWith('/search?q=') != true) {
-        publisherLinkElement = null;
+    if (publisherLinkElement?.localName != 'a' ||
+        publisherLinkElement?.attributes['href']?.startsWith('/search?q=') !=
+            true) {
+      publisherLinkElement = null;
     }
 
     // Thumbnail
     final thumbnailElement = main.querySelector('div[id^="list_cover_"] img');
-    
+
     // Info/Metadata
     final infoElement = main.querySelector('div.text-gray-800');
-    
+
     // Description
     dom.Element? descriptionElement;
-    final descriptionLabel = main.querySelector('div.js-md5-top-box-description div.text-xs.text-gray-500.uppercase');
-    
+    final descriptionLabel = main.querySelector(
+        'div.js-md5-top-box-description div.text-xs.text-gray-500.uppercase');
+
     if (descriptionLabel?.text.trim().toLowerCase() == 'description') {
-        descriptionElement = descriptionLabel?.nextElementSibling;
+      descriptionElement = descriptionLabel?.nextElementSibling;
     }
     String description = descriptionElement?.text.trim() ?? " ";
 
@@ -356,14 +381,14 @@ class AnnasArchieve {
       return null;
     }
 
-    final String title = titleElement.text.trim().split('<span')[0].trim(); 
+    final String title = titleElement.text.trim().split('<span')[0].trim();
     final String author = authorLinkElement?.text.trim() ?? "unknown";
     final String? thumbnail = thumbnailElement?.attributes['src'];
-    
+
     final String publisher = publisherLinkElement?.text.trim() ?? "unknown";
     // NOTE: If you extract any numeric data from the 'info' string later in your app (e.g., file size or page count)
     // and attempt to convert it to an integer or double, that's where you should use _safeParse.
-    final String info = infoElement?.text.trim() ?? ''; 
+    final String info = infoElement?.text.trim() ?? '';
 
     return BookInfoData(
       title: title,
@@ -385,9 +410,11 @@ class AnnasArchieve {
       required String content,
       required String sort,
       required String fileType,
-      required bool enableFilters}) {
+      required bool enableFilters,
+      String language = ''}) {
     return Uri.parse('$baseUrl/search').replace(queryParameters: {
       'q': searchQuery,
+      if (enableFilters && language.isNotEmpty) 'lang': language,
       if (enableFilters && content.isNotEmpty) 'content': content,
       if (enableFilters && fileType.isNotEmpty) 'ext': fileType,
       if (enableFilters && sort.isNotEmpty) 'sort': sort,
@@ -400,6 +427,7 @@ class AnnasArchieve {
       String sort = "",
       String fileType = "",
       bool enableFilters = true,
+      String language = '',
       String? pageHtml}) async {
     try {
       final String encodedURL = urlEncoder(
@@ -407,7 +435,8 @@ class AnnasArchieve {
           content: content,
           sort: sort,
           fileType: fileType,
-          enableFilters: enableFilters);
+          enableFilters: enableFilters,
+          language: language);
 
       return _parser(await _getPage(encodedURL, pageHtml), fileType);
     } on DioException catch (e) {

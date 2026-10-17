@@ -18,6 +18,7 @@ import 'package:openlib/ui/about_page.dart';
 import 'package:openlib/ui/components/page_title_widget.dart';
 import 'package:openlib/ui/components/archive_source_setting.dart';
 import 'package:openlib/ui/components/reader_app_setting.dart';
+import 'package:openlib/ui/components/download_windows_setting.dart';
 
 import 'package:openlib/state/state.dart' show themeModeProvider;
 
@@ -94,6 +95,7 @@ class SettingsPage extends ConsumerWidget {
             ),
             const ReaderAppSetting(format: 'epub'),
             const ReaderAppSetting(format: 'pdf'),
+            const DownloadWindowsSetting(),
             _PaddedContainer(
                 onClick: () async {
                   final currentDirectory =

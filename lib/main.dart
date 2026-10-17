@@ -20,6 +20,7 @@ import 'package:openlib/ui/mylibrary_page.dart';
 import 'package:openlib/ui/search_page.dart';
 import 'package:openlib/ui/settings_page.dart';
 import 'package:openlib/ui/themes.dart';
+import 'package:openlib/ui/components/download_status.dart';
 
 import 'package:openlib/services/files.dart'
     show moveFilesToAndroidInternalStorage;
@@ -33,7 +34,8 @@ import 'package:openlib/state/state.dart'
         cookieProvider,
         archiveBaseUrlProvider,
         archivePageLoaderProvider,
-        readerPreferenceProvider;
+        readerPreferenceProvider,
+        showDownloadWindowsProvider;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -59,6 +61,8 @@ void main() async {
 
   String browserUserAgent = await dataBase.getBrowserOptions('userAgent');
   String browserCookie = await dataBase.getBrowserOptions('cookie');
+  final showDownloadWindows =
+      await dataBase.getPreference('showDownloadWindows') == 1;
   final epubReader = await dataBase.getPreference('epubReaderApp') as String;
   final pdfReader = await dataBase.getPreference('pdfReaderApp') as String;
   String archiveBaseUrl = AnnasArchieve.defaultBaseUrl;
@@ -91,6 +95,7 @@ void main() async {
         if (Platform.isAndroid)
           archivePageLoaderProvider
               .overrideWithValue(ArchiveBrowserSession.loadPage),
+        showDownloadWindowsProvider.overrideWith((ref) => showDownloadWindows),
         readerPreferenceProvider('epub').overrideWith((ref) => epubReader),
         readerPreferenceProvider('pdf').overrideWith((ref) => pdfReader),
       ],
@@ -170,6 +175,7 @@ class _MainScreenState extends ConsumerState<MainScreen> {
             Expanded(
               child: _widgetOptions.elementAt(selectedIndex),
             ),
+            const DownloadStatusBar(),
           ],
         ),
       ),

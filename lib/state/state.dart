@@ -1,5 +1,6 @@
 // Dart imports:
 import 'dart:math';
+import 'dart:async';
 
 // Flutter imports:
 import 'package:flutter/material.dart';
@@ -16,6 +17,9 @@ import 'package:openlib/services/files.dart';
 import 'package:openlib/services/open_library.dart';
 import 'package:openlib/services/goodreads.dart';
 import 'package:openlib/services/reader_apps.dart';
+import 'package:openlib/services/book_download.dart';
+import 'package:openlib/services/archive_download.dart';
+import 'package:openlib/services/download_file.dart';
 // Assuming OpenLibrary, Goodreads, PenguinRandomHouse, BookDigits, and SubCategoriesTypeList are defined
 // or are simple placeholder services/models that work as intended.
 
@@ -72,6 +76,7 @@ final themeModeProvider = StateProvider<ThemeMode>((ref) => ThemeMode.light);
 
 // Search Filter States
 final selectedTypeState = StateProvider<String>((ref) => "All");
+final selectedLanguageState = StateProvider<String>((ref) => '');
 final selectedSortState = StateProvider<String>((ref) => "Most Relevant");
 final selectedFileTypeState = StateProvider<String>((ref) => "All");
 final searchQueryProvider = StateProvider<String>((ref) => "");
@@ -88,12 +93,15 @@ final archiveBaseUrlProvider =
 final archiveBrowserPagesProvider =
     StateProvider<Map<String, String>>((ref) => {});
 final webViewLoadingState = StateProvider.autoDispose<bool>((ref) => true);
-final downloadProgressProvider = StateProvider.autoDispose<double>((ref) => 0.0);
+final downloadProgressProvider =
+    StateProvider.autoDispose<double>((ref) => 0.0);
 final mirrorStatusProvider = StateProvider.autoDispose<bool>((ref) => false);
 final totalFileSizeInBytes = StateProvider.autoDispose<int>((ref) => 0);
 final downloadedFileSizeInBytes = StateProvider.autoDispose<int>((ref) => 0);
-final downloadState = StateProvider.autoDispose<ProcessState>((ref) => ProcessState.waiting);
-final checkSumState = StateProvider.autoDispose<CheckSumProcessState>((ref) => CheckSumProcessState.waiting);
+final downloadState =
+    StateProvider.autoDispose<ProcessState>((ref) => ProcessState.waiting);
+final checkSumState = StateProvider.autoDispose<CheckSumProcessState>(
+    (ref) => CheckSumProcessState.waiting);
 final cancelCurrentDownload = StateProvider<CancelToken>((ref) {
   return CancelToken();
 });
@@ -153,20 +161,22 @@ final getTrendingBooks = FutureProvider<List<TrendingBookData>>((ref) async {
   GoodReads goodReads = GoodReads();
   // Assuming these classes are available from your project imports
   // ignore: prefer_const_constructors
-  final penguinTrending = PenguinRandomHouse(); 
+  final penguinTrending = PenguinRandomHouse();
   // ignore: prefer_const_constructors
   final bookDigits = BookDigits();
 
-  List<TrendingBookData> trendingBooks = await Future.wait<List<TrendingBookData>>([
+  List<TrendingBookData> trendingBooks =
+      await Future.wait<List<TrendingBookData>>([
     goodReads.trendingBooks(),
     penguinTrending.trendingBooks(),
     // openLibrary.trendingBooks(), // Commented out as in the original
     bookDigits.trendingBooks(),
   ]).then((List<List<TrendingBookData>> listOfData) =>
-      listOfData.expand((element) => element).toList());
+          listOfData.expand((element) => element).toList());
 
   if (trendingBooks.isEmpty) {
-    throw Exception('Nothing Trending Today :('); // Use Exception instead of String
+    throw Exception(
+        'Nothing Trending Today :('); // Use Exception instead of String
   }
   trendingBooks.shuffle();
   return trendingBooks;
@@ -188,25 +198,36 @@ final getSubCategoryTypeList = FutureProvider.family
 // Provider for Anna's Archive Search Results
 final searchProvider = FutureProvider.family
     .autoDispose<List<BookData>, String>((ref, searchQuery) async {
-  if (searchQuery.isEmpty) return []; // Return empty list if search query is empty
+  if (searchQuery.isEmpty)
+    return []; // Return empty list if search query is empty
 
+  var disposed = false;
+  ref.onDispose(() => disposed = true);
   final AnnasArchieve annasArchieve = AnnasArchieve(
       baseUrl: ref.watch(archiveBaseUrlProvider),
-      browserPageLoader: ref.watch(archivePageLoaderProvider));
+      browserPageLoader: ref.watch(archivePageLoaderProvider),
+      preferBrowser: ref.watch(archivePageLoaderProvider) != null);
   ref.onDispose(() => annasArchieve.dio.close(force: true));
   final url = annasArchieve.urlEncoder(
       searchQuery: searchQuery,
       content: ref.watch(getTypeValue),
       sort: ref.watch(getSortValue),
       fileType: ref.watch(getFileTypeValue),
-      enableFilters: ref.watch(enableFiltersState));
+      enableFilters: ref.watch(enableFiltersState),
+      language: ref.watch(selectedLanguageState));
   List<BookData> data = await annasArchieve.searchBooks(
       searchQuery: searchQuery,
       content: ref.watch(getTypeValue),
       sort: ref.watch(getSortValue),
       fileType: ref.watch(getFileTypeValue),
       enableFilters: ref.watch(enableFiltersState),
+      language: ref.watch(selectedLanguageState),
       pageHtml: ref.watch(archiveBrowserPagesProvider)[url]);
+  if (!disposed) {
+    final cache = ref.keepAlive();
+    final expiry = Timer(const Duration(minutes: 3), cache.close);
+    ref.onDispose(expiry.cancel);
+  }
   return data;
 });
 
@@ -215,10 +236,13 @@ final bookInfoProvider =
     FutureProvider.family<BookInfoData, String>((ref, url) async {
   final AnnasArchieve annasArchieve = AnnasArchieve(
       baseUrl: ref.watch(archiveBaseUrlProvider),
-      browserPageLoader: ref.watch(archivePageLoaderProvider));
+      browserPageLoader: ref.watch(archivePageLoaderProvider),
+      preferBrowser: ref.watch(archivePageLoaderProvider) != null);
   ref.onDispose(() => annasArchieve.dio.close(force: true));
-  BookInfoData data = await annasArchieve.bookInfo(url: url,
-      pageHtml: ref.watch(archiveBrowserPagesProvider)[annasArchieve.resolveUrl(url)]);
+  BookInfoData data = await annasArchieve.bookInfo(
+      url: url,
+      pageHtml: ref
+          .watch(archiveBrowserPagesProvider)[annasArchieve.resolveUrl(url)]);
   return data;
 });
 
@@ -264,3 +288,35 @@ Future<void> saveEpubState(
   String pos = position ?? '';
   await dataBase.saveBookState(fileName, pos);
 }
+
+final showDownloadWindowsProvider = StateProvider<bool>((ref) => false);
+final StateNotifierProvider<BookDownloadController, BookDownload?>
+    bookDownloadProvider =
+    StateNotifierProvider<BookDownloadController, BookDownload?>((ref) {
+  return BookDownloadController(
+    resolve: ArchiveDownload.resolve,
+    transfer: (book, mirrors, progress, cancel) => downloadFile(
+        mirrors: mirrors,
+        archiveBaseUrl: ref.read(archiveBaseUrlProvider),
+        md5: book.md5,
+        format: book.format!,
+        onProgress: progress,
+        cancelToken: cancel),
+    verify: (book) =>
+        verifyFileCheckSum(md5Hash: book.md5, format: book.format!),
+    save: (book) async => dataBase.insert(MyBook(
+        id: book.md5,
+        title: book.title,
+        author: book.author,
+        thumbnail: book.thumbnail,
+        link: book.link,
+        publisher: book.publisher,
+        info: book.info,
+        format: book.format,
+        description: book.description)),
+    onSaved: (book) {
+      ref.invalidate(checkIdExists(book.md5));
+      ref.invalidate(myLibraryProvider);
+    },
+  );
+});
