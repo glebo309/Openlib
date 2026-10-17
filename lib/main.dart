@@ -20,6 +20,7 @@ import 'package:openlib/ui/mylibrary_page.dart';
 import 'package:openlib/ui/search_page.dart';
 import 'package:openlib/ui/settings_page.dart';
 import 'package:openlib/ui/themes.dart';
+import 'package:openlib/ui/components/download_status.dart';
 
 import 'package:openlib/services/files.dart'
     show moveFilesToAndroidInternalStorage;
@@ -32,7 +33,9 @@ import 'package:openlib/state/state.dart'
         userAgentProvider,
         cookieProvider,
         archiveBaseUrlProvider,
-        archivePageLoaderProvider;
+        archivePageLoaderProvider,
+        readerPreferenceProvider,
+        showDownloadWindowsProvider;
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -58,6 +61,10 @@ void main() async {
 
   String browserUserAgent = await dataBase.getBrowserOptions('userAgent');
   String browserCookie = await dataBase.getBrowserOptions('cookie');
+  final showDownloadWindows =
+      await dataBase.getPreference('showDownloadWindows') == 1;
+  final epubReader = await dataBase.getPreference('epubReaderApp') as String;
+  final pdfReader = await dataBase.getPreference('pdfReaderApp') as String;
   String archiveBaseUrl = AnnasArchieve.defaultBaseUrl;
   try {
     archiveBaseUrl = AnnasArchieve.normalizeBaseUrl(
@@ -69,7 +76,9 @@ void main() async {
   if (Platform.isAndroid) {
     SystemChrome.setSystemUIOverlayStyle(SystemUiOverlayStyle(
         systemNavigationBarColor:
-            isDarkMode ? Colors.black : Colors.grey.shade200));
+            isDarkMode ? Colors.black : Colors.grey.shade200,
+        systemNavigationBarIconBrightness:
+            isDarkMode ? Brightness.light : Brightness.dark));
     await moveFilesToAndroidInternalStorage();
   }
 
@@ -86,7 +95,11 @@ void main() async {
         cookieProvider.overrideWith((ref) => browserCookie),
         archiveBaseUrlProvider.overrideWith((ref) => archiveBaseUrl),
         if (Platform.isAndroid)
-          archivePageLoaderProvider.overrideWithValue(ArchiveBrowserSession.loadPage),
+          archivePageLoaderProvider
+              .overrideWithValue(ArchiveBrowserSession.loadPage),
+        showDownloadWindowsProvider.overrideWith((ref) => showDownloadWindows),
+        readerPreferenceProvider('epub').overrideWith((ref) => epubReader),
+        readerPreferenceProvider('pdf').overrideWith((ref) => pdfReader),
       ],
       child: const MyApp(),
     ),
@@ -139,39 +152,42 @@ class _MainScreenState extends ConsumerState<MainScreen> {
     final selectedIndex = ref.watch(selectedIndexProvider);
 
     return Scaffold(
-      body: NotificationListener<UserScrollNotification>(
-        onNotification: (notification) {
-          if (notification.direction == ScrollDirection.reverse &&
-              _showExpandedHeader) {
-            setState(() => _showExpandedHeader = false);
-          } else if (notification.direction == ScrollDirection.forward &&
-              !_showExpandedHeader) {
-            setState(() => _showExpandedHeader = true);
-          }
-          return false;
-        },
-        child: Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              height: _showExpandedHeader ? kToolbarHeight : 0,
-              child: AppBar(
-                backgroundColor: Theme.of(context).colorScheme.surface,
-                title: const Text("Openlib"),
-                titleTextStyle:
-                    Theme.of(context).textTheme.displayLarge,
+      body: SafeArea(
+        bottom: false,
+        child: NotificationListener<UserScrollNotification>(
+          onNotification: (notification) {
+            if (notification.direction == ScrollDirection.reverse &&
+                _showExpandedHeader) {
+              setState(() => _showExpandedHeader = false);
+            } else if (notification.direction == ScrollDirection.forward &&
+                !_showExpandedHeader) {
+              setState(() => _showExpandedHeader = true);
+            }
+            return false;
+          },
+          child: Column(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                height: _showExpandedHeader ? kToolbarHeight : 0,
+                child: AppBar(
+                  primary: false,
+                  backgroundColor: Theme.of(context).colorScheme.surface,
+                  title: const Text("Openlib"),
+                  titleTextStyle: Theme.of(context).textTheme.displayLarge,
+                ),
               ),
-            ),
-            Expanded(
-              child: _widgetOptions.elementAt(selectedIndex),
-            ),
-          ],
+              Expanded(
+                child: _widgetOptions.elementAt(selectedIndex),
+              ),
+              const DownloadStatusBar(),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: SafeArea(
         child: GNav(
-          backgroundColor:
-              isDarkMode ? Colors.black : Colors.grey.shade200,
+          backgroundColor: isDarkMode ? Colors.black : Colors.grey.shade200,
           haptic: true,
           tabBorderRadius: 50,
           tabActiveBorder: Border.all(
@@ -181,13 +197,11 @@ class _MainScreenState extends ConsumerState<MainScreen> {
           curve: Curves.fastLinearToSlowEaseIn,
           duration: const Duration(milliseconds: 25),
           gap: 5,
-          color: Colors.white,
+          color: Theme.of(context).colorScheme.tertiary,
           activeColor: Colors.white,
           iconSize: 19,
-          tabBackgroundColor:
-              Theme.of(context).colorScheme.secondary,
-          padding:
-              const EdgeInsets.symmetric(horizontal: 13, vertical: 6.5),
+          tabBackgroundColor: Theme.of(context).colorScheme.secondary,
+          padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 6.5),
           tabs: const [
             GButton(icon: Icons.trending_up, text: 'Home'),
             GButton(icon: Icons.search, text: 'Search'),
